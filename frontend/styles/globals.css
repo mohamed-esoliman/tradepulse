@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-bg-dark text-white;
+  }
+  
+  body {
+    @apply min-h-screen;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-bg-card rounded-lg shadow-lg p-6;
+  }
+  
+  .trade-buy {
+    @apply text-trade-green;
+  }
+  
+  .trade-sell {
+    @apply text-trade-red;
+  }
+  
+  .metric-card {
+    @apply bg-bg-card rounded-lg p-4 shadow-md;
+  }
+  
+  .chart-container {
+    @apply bg-bg-card rounded-lg p-4 shadow-md;
+  }
+} 
