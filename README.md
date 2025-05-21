@@ -1,95 +1,98 @@
-# TradePulse 📈
+# TradePulse
 
-A fun trading simulator that shows how high-frequency trading works in real time! Watch as algorithms make trades across different stock exchanges while you see the profits and losses update live.
+A high-frequency trading simulation platform that demonstrates algorithmic trading strategies and real-time market data processing. TradePulse provides a comprehensive environment for understanding the mechanics of automated trading systems across multiple exchange venues.
 
-## What does it do?
+### Key Features
 
-TradePulse simulates a simple trading bot that:
+- **Real-time Market Simulation**: Generates realistic price movements across multiple exchange venues
+- **Momentum-based Trading Algorithm**: Implements algorithmic trading strategies based on price momentum analysis
+- **Latency Modeling**: Simulates realistic network latency between exchanges to model HFT conditions
+- **Live Dashboard**: Web-based interface providing real-time visualization of trading activity and performance metrics
+- **Performance Analytics**: Comprehensive profit and loss tracking with historical data analysis
 
-- Watches fake stock prices from multiple exchanges (NASDAQ, NYSE, etc.)
-- Makes buy/sell decisions based on price momentum
-- Shows you everything happening in real time on a web dashboard
-- Tracks how much money it's making or losing
+## Prerequisites
 
-It's built with C++ for the trading engine (because speed matters!) and a Next.js web interface so you can watch it all happen.
+- **Operating System**: macOS or Linux
+- **Node.js**: Version 18.0 or higher
+- **Development Tools**: CMake, GCC compiler suite
+- **Package Manager**: npm or yarn
 
-## Quick Start
+## Installation & Setup
 
-### You'll need:
-
-- A Mac or Linux computer
-- Node.js installed
-- Basic development tools (cmake, gcc)
-
-### Get it running:
-
-**1. Get the code:**
+### 1. Clone the Repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/mohamed-esoliman/tradepulse.git
 cd tradepulse
 ```
 
-**2. Build the trading engine:**
+### 2. Build the Trading Engine
 
 ```bash
 cd backend
 mkdir build && cd build
-cmake .. && make
+cmake ..
+make
 ```
 
-**3. Set up the web interface:**
+### 3. Install Frontend Dependencies
 
 ```bash
 cd ../../frontend
 npm install
 ```
 
-**4. Start everything:**
+## Running the Application
 
-First, start the trading engine:
+### Start the Trading Engine
 
 ```bash
 cd backend/build
 ./tradepulse
 ```
 
-Then start the web interface:
+The trading engine will start on port 8080 and begin generating market data.
+
+### Launch the Dashboard
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Open http://localhost:3000 and watch the magic happen!
+Access the dashboard at `http://localhost:3000`
 
-## How it works
+## Dashboard Features
 
-**The Trading Bot:**
+The web dashboard provides real-time monitoring of:
 
-- Generates fake stock prices that move like real ones
-- Looks for momentum (when prices keep going up or down)
-- Buys when it sees upward momentum, sells when it sees downward momentum
-- Each exchange has different delays (latency) to make it realistic
+- **Trade Execution Stream**: Live feed of all buy/sell orders
+- **Profit & Loss Charts**: Historical performance visualization
+- **Latency Metrics**: Exchange-specific latency measurements
+- **Market Data**: Real-time price movements across venues
 
-**What you see:**
+## Configuration & Customization
 
-- Live trades happening in real time
-- Charts showing profit/loss over time
-- Latency measurements for each exchange
-- A stream of all trades being executed
+### Trading Strategy Modification
 
-## Want to tinker with it?
+Modify the trading algorithm by editing `backend/strategy.cpp`. The current implementation uses momentum-based signals but can be extended with additional technical indicators.
 
-The cool thing about this simulator is you can easily modify how it works:
+### Exchange Configuration
 
-- **Change the trading strategy**: Edit `backend/strategy.cpp` to try different approaches
-- **Add new exchanges**: Modify `backend/market_feed.cpp` to include more venues
-- **Adjust latency**: Play with delays in `backend/latency.cpp`
-- **Customize the dashboard**: The frontend code is all in `frontend/components/`
+Add or modify exchange venues in `backend/market_feed.cpp`. Each exchange can be configured with specific latency characteristics and price behavior.
+
+### Latency Parameters
+
+Adjust network latency simulation parameters in `backend/latency.cpp` to model different network conditions and geographic distributions.
+
+### Frontend Customization
+
+Dashboard components are located in `frontend/components/` and can be modified to display additional metrics or customize the user interface.
 
 ## License
 
-MIT License - feel free to use this however you want!
+This project is licensed under the MIT License. See the LICENSE file for details.
 
----
+## Contributing
+
+Contributions are welcome. Please ensure all code follows the established patterns and includes appropriate documentation.
