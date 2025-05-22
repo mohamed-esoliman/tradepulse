@@ -9,6 +9,9 @@ backend/*.so
 backend/*.a
 backend/tradepulse
 
+# top-level build dir
+build/
+
 # C++ IDE files
 .vscode/
 .idea/
