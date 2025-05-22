@@ -1,98 +1,84 @@
-# TradePulse
+## TradePulse
 
-A high-frequency trading simulation platform that demonstrates algorithmic trading strategies and real-time market data processing. TradePulse provides a comprehensive environment for understanding the mechanics of automated trading systems across multiple exchange venues.
+**What TradePulse is**
 
-### Key Features
+A real‑time trading simulator and dashboard. It can consume live crypto trades (Coinbase), synthetic ticks, or replayed data; run pluggable strategies; execute orders through a single latency‑gated path; and stream executions to a Next.js dashboard.
 
-- **Real-time Market Simulation**: Generates realistic price movements across multiple exchange venues
-- **Momentum-based Trading Algorithm**: Implements algorithmic trading strategies based on price momentum analysis
-- **Latency Modeling**: Simulates realistic network latency between exchanges to model HFT conditions
-- **Live Dashboard**: Web-based interface providing real-time visualization of trading activity and performance metrics
-- **Performance Analytics**: Comprehensive profit and loss tracking with historical data analysis
+### Preview
 
-## Prerequisites
+![TradePulse Dashboard Preview](docs/tradepulse_preview.png)
 
-- **Operating System**: macOS or Linux
-- **Node.js**: Version 18.0 or higher
-- **Development Tools**: CMake, GCC compiler suite
-- **Package Manager**: npm or yarn
+### Data flow (live or synthetic)
 
-## Installation & Setup
+- Tick arrives (live WebSocket or synthetic generator) → normalized `MarketTick {venue, symbol, price, size, exchange_recv_ts_ms, ingest_ts_ms}`.
+- Strategy processes tick → emits `Order` via `on_order({id, venue, symbol, side, price, quantity, order_created_ts_ms})`.
+- Latency gate (if modelled or both): delays callback by venue latency; measured path bypasses delay.
+- `OrderBook.submitOrder` → fills immediately at current price; updates positions/PnL; stamps `order_executed_ts_ms`.
+- Backend broadcasts a JSON trade message with measured/modelled fields; dashboard renders it.
 
-### 1. Clone the Repository
+### Strategies (`backend/strategies/`)
 
-```bash
-git clone https://github.com/mohamed-esoliman/tradepulse.git
-cd tradepulse
-```
+- **momentum**: buys/sells on monotonic streaks over lookback.
+- **mean_reversion**: revert to rolling mean.
+- **breakout**: trades channel breakouts (rolling high/low).
+- **vwap_reversion**: revert to rolling VWAP (price×size).
+- **macd**: EMA(12/26) with 9‑period signal; trade on histogram sign.
+- **rsi**: buy RSI<30, sell RSI>70 (period configurable).
+- **bollinger**: buy below lower band, sell above upper (period, k).
 
-### 2. Build the Trading Engine
+### Modes
 
-```bash
-cd backend
-mkdir build && cd build
-cmake ..
-make
-```
+- `--latency_mode=measured`: no artificial delay; “real only”.
+- `--latency_mode=modelled`: simulated only.
+- `--latency_mode=both`: simulated path + measured stamps.
 
-### 3. Install Frontend Dependencies
+### How to run (macOS)
 
-```bash
-cd ../../frontend
-npm install
-```
+- **Prereqs**: `brew install cmake openssl boost`; Node.js 18+
 
-## Running the Application
-
-### Start the Trading Engine
+- **Backend build**:
 
 ```bash
-cd backend/build
-./tradepulse
+mkdir -p backend/build && cd backend/build && cmake .. && make -j
 ```
 
-The trading engine will start on port 8080 and begin generating market data.
+### CLI options
 
-### Launch the Dashboard
+- **--source=synthetic|live|replay** (default: `synthetic`)
+- **--exchange=coinbase|binance** (default: `coinbase`)
+- **--symbol=SYMBOL** (default: `BTC-USD`)
+- **--replay_file=PATH** (default: `./ticks.ndjson`)
+- **--replay_speed=FLOAT** (default: `1.0`)
+- **--latency_mode=measured|modelled|both** (default: `both`)
+- **--modelled_latency_ms=VENUE:ms[,VENUE:ms...]**
+  - Example: `--modelled_latency_ms=SYNTH:20,COINBASE:30,LSE:70`
+  - If omitted, defaults are `SYNTH:20`, `COINBASE:30`, `LSE:70`.
+- **--strategy=NAME** (default: `momentum`)
+  - Examples: `momentum`, `mean_reversion`, `breakout`, `vwap_reversion`, `macd`, `rsi`, `bollinger`.
+- **--lookback=INT** (default: `3`)
+- **--order_qty=INT** (default: `100`)
+
+### Examples
 
 ```bash
-cd frontend
-npm run dev
+# Synthetic
+./tradepulse --source=synthetic --strategy=momentum --lookback=3 --order_qty=100 --latency_mode=measured
+
+# Live (Coinbase)
+./tradepulse --source=live --exchange=coinbase --symbol=BTC-USD --strategy=breakout --lookback=20 --order_qty=50 --latency_mode=measured
 ```
 
-Access the dashboard at `http://localhost:3000`
+- **Frontend**:
 
-## Dashboard Features
+```bash
+cd frontend && npm i && npm run dev
+# → http://localhost:3000
+```
 
-The web dashboard provides real-time monitoring of:
+### Contributing
 
-- **Trade Execution Stream**: Live feed of all buy/sell orders
-- **Profit & Loss Charts**: Historical performance visualization
-- **Latency Metrics**: Exchange-specific latency measurements
-- **Market Data**: Real-time price movements across venues
+Contributions are welcome! Feel free to open Issues and Pull Requests.
 
-## Configuration & Customization
+### License
 
-### Trading Strategy Modification
-
-Modify the trading algorithm by editing `backend/strategy.cpp`. The current implementation uses momentum-based signals but can be extended with additional technical indicators.
-
-### Exchange Configuration
-
-Add or modify exchange venues in `backend/market_feed.cpp`. Each exchange can be configured with specific latency characteristics and price behavior.
-
-### Latency Parameters
-
-Adjust network latency simulation parameters in `backend/latency.cpp` to model different network conditions and geographic distributions.
-
-### Frontend Customization
-
-Dashboard components are located in `frontend/components/` and can be modified to display additional metrics or customize the user interface.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
-
-## Contributing
-
-Contributions are welcome. Please ensure all code follows the established patterns and includes appropriate documentation.
+This project is licensed under the terms of the license in the `LICENSE` file.
