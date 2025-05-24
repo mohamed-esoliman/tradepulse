@@ -30,51 +30,48 @@ interface LatencyChartProps {
 
 export const LatencyChart: React.FC<LatencyChartProps> = ({ trades, maxDataPoints = 50 }) => {
   const chartData = useMemo(() => {
-    // Group trades by venue
-    const venueData: { [venue: string]: { latency: number; timestamp: string }[] } = {};
-    
-    trades.slice(-maxDataPoints).forEach(trade => {
-      if (!venueData[trade.venue]) {
-        venueData[trade.venue] = [];
-      }
-      venueData[trade.venue].push({
-        latency: trade.latency_ms,
-        timestamp: trade.timestamp,
-      });
-    });
+    const recent = trades.slice(-maxDataPoints);
+    const labels = recent.map(t => new Date(t.server_broadcast_ts_ms || Date.now()).toLocaleTimeString());
+    const venues = Array.from(new Set(recent.map(t => t.venue)));
+    const colors = [
+      'rgba(59, 130, 246, 0.8)',
+      'rgba(16, 185, 129, 0.8)',
+      'rgba(239, 68, 68, 0.8)',
+      'rgba(245, 158, 11, 0.8)'
+    ];
 
-    // Create labels from timestamps
-    const labels = trades
-      .slice(-maxDataPoints)
-      .map(trade => {
-        const date = new Date(trade.timestamp);
-        return date.toLocaleTimeString();
+    const datasets: any[] = [];
+    venues.forEach((venue, idx) => {
+      const venueTrades = recent.filter(t => t.venue === venue);
+      const modelled = venueTrades.map(t => t.modelled_latency_ms || 0);
+      const execLatency = venueTrades.map(t => {
+        if (t.order_executed_ts_ms && t.order_created_ts_ms) {
+          return Math.max(0, t.order_executed_ts_ms - t.order_created_ts_ms);
+        }
+        return 0;
       });
-
-    // Create datasets for each venue
-    const datasets = Object.entries(venueData).map(([venue, data], index) => {
-      const colors = [
-        'rgba(59, 130, 246, 0.8)',  // blue
-        'rgba(16, 185, 129, 0.8)',  // green
-        'rgba(239, 68, 68, 0.8)',   // red
-        'rgba(245, 158, 11, 0.8)',  // yellow
-      ];
-      
-      return {
-        label: venue,
-        data: data.map(d => d.latency),
-        borderColor: colors[index % colors.length],
-        backgroundColor: colors[index % colors.length].replace('0.8', '0.2'),
+      datasets.push({
+        label: `${venue} • Modelled`,
+        data: modelled,
+        borderColor: colors[idx % colors.length],
+        backgroundColor: colors[idx % colors.length].replace('0.8', '0.2'),
         borderWidth: 2,
         fill: false,
         tension: 0.1,
-      };
+      });
+      datasets.push({
+        label: `${venue} • Measured Exec`,
+        data: execLatency,
+        borderColor: colors[(idx + 1) % colors.length],
+        backgroundColor: colors[(idx + 1) % colors.length].replace('0.8', '0.2'),
+        borderDash: [6, 4],
+        borderWidth: 2,
+        fill: false,
+        tension: 0.1,
+      });
     });
 
-    return {
-      labels,
-      datasets,
-    };
+    return { labels, datasets };
   }, [trades, maxDataPoints]);
 
   const options: ChartOptions<'line'> = {

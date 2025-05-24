@@ -49,6 +49,14 @@ void OrderBook::processOrder(const Order &order)
     trade.price = order.price;
     trade.quantity = order.quantity;
     trade.timestamp = std::chrono::system_clock::now();
+    trade.size = static_cast<double>(order.quantity);
+    trade.symbol = order.symbol;
+    trade.order_created_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(order.timestamp.time_since_epoch()).count();
+    trade.order_executed_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(trade.timestamp.time_since_epoch()).count();
+    trade.server_broadcast_ts_ms = -1;
+    trade.exchange_recv_ts_ms = order.exchange_recv_ts_ms;
+    trade.ingest_ts_ms = order.ingest_ts_ms;
+    trade.modelled_latency_ms = 0.0;
 
     // Calculate PnL based on position changes
     double pnl = 0.0;

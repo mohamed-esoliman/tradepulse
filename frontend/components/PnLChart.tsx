@@ -35,14 +35,14 @@ export const PnLChart: React.FC<PnLChartProps> = ({ trades, maxDataPoints = 100 
     const pnlData = trades.slice(-maxDataPoints).map(trade => {
       cumulativePnL += trade.pnl;
       return {
-        timestamp: trade.timestamp,
+        ts_ms: trade.server_broadcast_ts_ms || trade.ingest_ts_ms || Date.now(),
         cumulativePnL,
         tradePnL: trade.pnl,
       };
     });
 
     const labels = pnlData.map(data => {
-      const date = new Date(data.timestamp);
+      const date = new Date(data.ts_ms);
       return date.toLocaleTimeString();
     });
 

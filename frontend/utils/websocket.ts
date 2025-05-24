@@ -1,17 +1,30 @@
 export interface TradeData {
+  type: 'trade';
   venue: string;
+  symbol: string;
+  side: 'BUY' | 'SELL';
   price: number;
-  action: 'BUY' | 'SELL';
-  latency_ms: number;
-  timestamp: string;
+  size: number;
   pnl: number;
-  order_id: string;
+  orderId: string;
+  modelled_latency_ms: number;
+  exchange_recv_ts_ms: number;
+  ingest_ts_ms: number;
+  order_created_ts_ms: number;
+  order_executed_ts_ms: number;
+  server_broadcast_ts_ms: number;
 }
 
 export interface LatencyData {
+  type: 'latency';
   venue: string;
-  latency_ms: number;
-  timestamp: string;
+  modelled_latency_ms: number;
+  ts: number;
+}
+
+export interface HeartbeatData {
+  type: 'hb';
+  server_ts_ms: number;
 }
 
 export class WebSocketClient {
@@ -25,6 +38,10 @@ export class WebSocketClient {
   private onConnectCallback?: () => void;
   private onDisconnectCallback?: () => void;
   private onErrorCallback?: (error: Error) => void;
+  private onHeartbeatCallback?: (hb: HeartbeatData) => void;
+  public lastServerTsMs: number = 0;
+  public lastMessageAtMs: number = 0;
+  public drops: number = 0;
 
   constructor(url: string) {
     this.url = url;
@@ -48,6 +65,7 @@ export class WebSocketClient {
             this.handleMessage(data);
           } catch (error) {
             console.error('Error parsing WebSocket message:', error);
+            this.drops++;
           }
         };
 
@@ -69,28 +87,43 @@ export class WebSocketClient {
   }
 
   private handleMessage(data: any) {
-    // Check if it's a trade message
-    if (data.venue && data.price && data.action) {
-      const trade: TradeData = {
-        venue: data.venue,
-        price: data.price,
-        action: data.action,
-        latency_ms: data.latency_ms,
-        timestamp: data.timestamp,
-        pnl: data.pnl,
-        order_id: data.order_id,
-      };
-      this.onTradeCallback?.(trade);
+    const now = Date.now();
+    this.lastMessageAtMs = now;
+    if (data.type === 'hb') {
+      const hb: HeartbeatData = { type: 'hb', server_ts_ms: data.server_ts_ms };
+      this.lastServerTsMs = data.server_ts_ms || 0;
+      this.onHeartbeatCallback?.(hb);
+      return;
     }
-
-    // Check if it's a latency message
-    if (data.venue && data.latency_ms && !data.price) {
+    if (data.type === 'latency') {
       const latency: LatencyData = {
+        type: 'latency',
         venue: data.venue,
-        latency_ms: data.latency_ms,
-        timestamp: data.timestamp,
+        modelled_latency_ms: data.modelled_latency_ms,
+        ts: data.server_broadcast_ts_ms || now,
       };
       this.onLatencyCallback?.(latency);
+      return;
+    }
+    if (data.type === 'trade') {
+      const trade: TradeData = {
+        type: 'trade',
+        venue: data.venue,
+        symbol: data.symbol,
+        side: data.side,
+        price: data.price,
+        size: data.size,
+        pnl: data.pnl,
+        orderId: data.orderId,
+        modelled_latency_ms: data.modelled_latency_ms,
+        exchange_recv_ts_ms: data.exchange_recv_ts_ms ?? -1,
+        ingest_ts_ms: data.ingest_ts_ms ?? -1,
+        order_created_ts_ms: data.order_created_ts_ms ?? -1,
+        order_executed_ts_ms: data.order_executed_ts_ms ?? -1,
+        server_broadcast_ts_ms: data.server_broadcast_ts_ms ?? now,
+      };
+      this.onTradeCallback?.(trade);
+      return;
     }
   }
 
@@ -136,5 +169,9 @@ export class WebSocketClient {
 
   onError(callback: (error: Error) => void) {
     this.onErrorCallback = callback;
+  }
+
+  onHeartbeat(callback: (hb: HeartbeatData) => void) {
+    this.onHeartbeatCallback = callback;
   }
 } 

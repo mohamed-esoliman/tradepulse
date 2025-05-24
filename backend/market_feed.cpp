@@ -1,24 +1,15 @@
 #include "market_feed.h"
 #include <iostream>
 #include <thread>
+#include <chrono>
 
-MarketFeed::MarketFeed() : running_(false)
+MarketFeed::MarketFeed() : running_(false), symbol_("BTC-USD"), tick_interval_ms_(100)
 {
-    venues_ = {"NASDAQ", "LSE", "NYSE", "CBOE"};
-
-    // Initialize starting prices and random generators
-    current_prices_["NASDAQ"] = 125.50;
-    current_prices_["LSE"] = 98.75;
-    current_prices_["NYSE"] = 142.25;
-    current_prices_["CBOE"] = 87.90;
-
-    // Setup random number generators with different seeds
+    venues_ = {"SYNTH"};
+    current_prices_["SYNTH"] = 100.0;
     std::random_device rd;
-    for (const auto &venue : venues_)
-    {
-        generators_[venue] = std::mt19937(rd());
-        distributions_[venue] = std::normal_distribution<double>(0.0, 0.1);
-    }
+    generators_["SYNTH"] = std::mt19937(rd());
+    distributions_["SYNTH"] = std::normal_distribution<double>(0.0, 0.1);
 }
 
 MarketFeed::~MarketFeed()
@@ -26,11 +17,12 @@ MarketFeed::~MarketFeed()
     stop();
 }
 
-void MarketFeed::start()
+void MarketFeed::start(std::function<void(const MarketTick &)> on_tick)
 {
     if (running_)
         return;
 
+    on_tick_ = on_tick;
     running_ = true;
     feed_thread_ = std::thread(&MarketFeed::generateTicks, this);
 }
@@ -47,10 +39,8 @@ void MarketFeed::stop()
     }
 }
 
-void MarketFeed::setTickCallback(std::function<void(const MarketTick &)> callback)
-{
-    tick_callback_ = callback;
-}
+void MarketFeed::setSymbol(const std::string &symbol) { symbol_ = symbol; }
+void MarketFeed::setTickIntervalMs(int interval_ms) { tick_interval_ms_ = interval_ms; }
 
 double MarketFeed::getCurrentPrice(const std::string &venue) const
 {
@@ -67,26 +57,24 @@ void MarketFeed::generateTicks()
 {
     while (running_)
     {
-        for (const auto &venue : venues_)
+        // Generate price movement using random walk
+        double price_change = distributions_["SYNTH"](generators_["SYNTH"]);
+        current_prices_["SYNTH"] = std::max(1.0, current_prices_["SYNTH"] + price_change);
+
+        MarketTick tick;
+        tick.venue = "SYNTH";
+        tick.symbol = symbol_;
+        tick.price = current_prices_["SYNTH"];
+        tick.size = 0.0;
+        tick.exchange_recv_ts_ms = -1;
+        auto now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
+        tick.ingest_ts_ms = now.time_since_epoch().count();
+
+        if (on_tick_)
         {
-            // Generate price movement using random walk
-            double price_change = distributions_[venue](generators_[venue]);
-            current_prices_[venue] = std::max(1.0, current_prices_[venue] + price_change);
-
-            // Create market tick
-            MarketTick tick;
-            tick.venue = venue;
-            tick.price = current_prices_[venue];
-            tick.timestamp = std::chrono::system_clock::now();
-            tick.volume = 100 + (generators_[venue]() % 900); // Random volume 100-1000
-
-            // Call the callback if set
-            if (tick_callback_)
-            {
-                tick_callback_(tick);
-            }
+            on_tick_(tick);
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(TICK_INTERVAL_MS));
+        std::this_thread::sleep_for(std::chrono::milliseconds(tick_interval_ms_));
     }
 }

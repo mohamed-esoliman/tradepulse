@@ -1,32 +1,33 @@
 #pragma once
 
-#include "market_feed.h"
+#include "strategies/strategy_base.h"
 #include "order_book.h"
 #include <vector>
 #include <map>
 #include <deque>
 #include <functional>
 
-class MomentumStrategy
+class MomentumStrategy : public IStrategy
 {
 public:
     MomentumStrategy(OrderBook &order_book);
     ~MomentumStrategy();
 
-    void onMarketTick(const MarketTick &tick);
-    void setOrderCallback(std::function<void(const Order &)> callback);
+    void onMarketTick(const MarketTick &tick) override;
+    void setLookback(int threshold) override;
+    void setOrderQuantity(int quantity) override;
+    const char *name() const override { return "momentum"; }
 
     // Strategy parameters
     void setTickThreshold(int threshold);
-    void setOrderQuantity(int quantity);
+    void setOrderQuantityInternal(int quantity);
 
 private:
-    void checkMomentum(const std::string &venue);
+    void checkMomentum(const std::string &venue, const MarketTick &tick);
     bool isUpwardMomentum(const std::string &venue) const;
     bool isDownwardMomentum(const std::string &venue) const;
 
     OrderBook &order_book_;
-    std::function<void(const Order &)> order_callback_;
 
     // Price history for momentum calculation
     std::map<std::string, std::deque<double>> price_history_;

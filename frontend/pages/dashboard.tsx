@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
-import { WebSocketClient, TradeData } from '../utils/websocket';
+import { WebSocketClient, TradeData, HeartbeatData } from '../utils/websocket';
 import { TradeStream } from '../components/TradeStream';
 import { LatencyChart } from '../components/LatencyChart';
 import { PnLChart } from '../components/PnLChart';
@@ -12,13 +12,21 @@ export default function Dashboard() {
   const [stats, setStats] = useState({
     totalTrades: 0,
     totalPnL: 0,
-    avgLatency: 0,
+    avgModelledLatency: 0,
+    rttMs: 0,
+    lastMessageAgeMs: 0,
     activeVenues: new Set<string>(),
+    strategy: 'unknown',
+    lookback: 0,
+    orderQty: 0,
+    source: 'synthetic',
+    symbol: 'BTC-USD',
+    running: 0,
   });
 
   // Initialize WebSocket connection
   useEffect(() => {
-    const client = new WebSocketClient('ws://localhost:8080');
+    const client = new WebSocketClient('ws://127.0.0.1:8080');
     setWsClient(client);
 
     client.onConnect(() => {
@@ -40,6 +48,12 @@ export default function Dashboard() {
       setTrades(prevTrades => [...prevTrades, trade]);
     });
 
+    client.onHeartbeat((hb: HeartbeatData) => {
+      const now = Date.now();
+      const rtt = Math.max(0, now - hb.server_ts_ms);
+      setStats(prev => ({ ...prev, rttMs: rtt }));
+    });
+
     // Attempt to connect
     setConnectionStatus('connecting');
     client.connect().catch(console.error);
@@ -49,20 +63,45 @@ export default function Dashboard() {
     };
   }, []);
 
+  // Fetch server info for strategy display
+  useEffect(() => {
+    async function fetchInfo() {
+      try {
+        const res = await fetch('http://127.0.0.1:8080/info');
+        const text = await res.text();
+        const map = Object.fromEntries(text.split('\n').filter(Boolean).map(line => {
+          const idx = line.indexOf('=');
+          return [line.slice(0, idx), line.slice(idx + 1)];
+        }));
+        setStats(prev => ({
+          ...prev,
+          strategy: map['strategy'] || 'unknown',
+          lookback: Number(map['lookback'] || 0),
+          orderQty: Number(map['order_qty'] || 0),
+          source: map['source'] || 'synthetic',
+          symbol: map['symbol'] || 'BTC-USD',
+          running: Number(map['running'] || 0),
+        }));
+      } catch {}
+    }
+    fetchInfo();
+  }, []);
+
   // Update stats when trades change
   useEffect(() => {
-    if (trades.length > 0) {
-      const totalPnL = trades.reduce((sum, trade) => sum + trade.pnl, 0);
-      const avgLatency = trades.reduce((sum, trade) => sum + trade.latency_ms, 0) / trades.length;
-      const activeVenues = new Set(trades.map(trade => trade.venue));
-
-      setStats({
-        totalTrades: trades.length,
-        totalPnL,
-        avgLatency,
-        activeVenues,
-      });
-    }
+    const totalPnL = trades.reduce((sum, t) => sum + t.pnl, 0);
+    const avgModelledLatency = trades.length > 0 ? trades.reduce((s, t) => s + (t.modelled_latency_ms || 0), 0) / trades.length : 0;
+    const activeVenues = new Set(trades.map(t => t.venue));
+    const now = Date.now();
+    const lastMessageAgeMs = wsClient ? Math.max(0, now - (wsClient.lastMessageAtMs || now)) : 0;
+    setStats(prev => ({
+      ...prev,
+      totalTrades: trades.length,
+      totalPnL,
+      avgModelledLatency,
+      lastMessageAgeMs,
+      activeVenues,
+    }));
   }, [trades]);
 
   const formatPnL = (pnl: number) => {
@@ -118,6 +157,12 @@ export default function Dashboard() {
                 <h1 className="text-2xl font-bold text-trade-blue">TradePulse</h1>
                 <span className="ml-2 text-sm text-gray-400">HFT Simulator</span>
               </div>
+              <div className="hidden md:flex items-center space-x-4">
+                <div className="text-xs text-gray-300">Strategy: <span className="font-semibold text-white">{stats.strategy}</span></div>
+                <div className="text-xs text-gray-300">Source: <span className="font-semibold text-white">{stats.source}</span></div>
+                <div className="text-xs text-gray-300">Lookback: <span className="font-semibold text-white">{stats.lookback}</span></div>
+                <div className="text-xs text-gray-300">Order Qty: <span className="font-semibold text-white">{stats.orderQty}</span></div>
+              </div>
               
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
@@ -129,6 +174,8 @@ export default function Dashboard() {
                     {getConnectionStatusText()}
                   </span>
                 </div>
+                <div className="text-xs text-gray-400">RTT: {stats.rttMs}ms</div>
+                <div className="text-xs text-gray-400">Last msg: {stats.lastMessageAgeMs}ms ago</div>
                 
                 <button
                   onClick={clearData}
@@ -160,9 +207,9 @@ export default function Dashboard() {
             </div>
             
             <div className="metric-card">
-              <div className="text-sm text-gray-400">Avg Latency</div>
+              <div className="text-sm text-gray-400">Avg Modelled Latency</div>
               <div className="text-2xl font-bold text-white">
-                {stats.avgLatency.toFixed(1)}ms
+                {stats.avgModelledLatency.toFixed(1)}ms
               </div>
             </div>
             
@@ -171,6 +218,8 @@ export default function Dashboard() {
               <div className="text-2xl font-bold text-white">{stats.activeVenues.size}</div>
             </div>
           </div>
+
+          {/* Controls removed; backend controlled via CLI flags */}
 
           {/* Charts Grid */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">

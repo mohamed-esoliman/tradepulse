@@ -17,10 +17,13 @@ struct Order
 {
     std::string id;
     std::string venue;
+    std::string symbol;
     OrderSide side;
     double price;
     int quantity;
     std::chrono::system_clock::time_point timestamp;
+    int64_t exchange_recv_ts_ms{-1};
+    int64_t ingest_ts_ms{-1};
 };
 
 struct Trade
@@ -32,6 +35,14 @@ struct Trade
     int quantity;
     std::chrono::system_clock::time_point timestamp;
     double pnl;
+    double size;
+    std::string symbol;
+    int64_t order_created_ts_ms;
+    int64_t order_executed_ts_ms;
+    int64_t server_broadcast_ts_ms;
+    int64_t exchange_recv_ts_ms;
+    int64_t ingest_ts_ms;
+    double modelled_latency_ms;
 };
 
 class OrderBook

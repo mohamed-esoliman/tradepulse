@@ -8,26 +8,19 @@
 #include <map>
 #include <atomic>
 #include <thread>
+#include "data_source.h"
 
-struct MarketTick
-{
-    std::string venue;
-    double price;
-    std::chrono::system_clock::time_point timestamp;
-    double volume;
-};
-
-class MarketFeed
+class MarketFeed : public IDataSource
 {
 public:
     MarketFeed();
     ~MarketFeed();
 
-    void start();
-    void stop();
+    void start(std::function<void(const MarketTick &)> on_tick) override;
+    void stop() override;
 
-    void setTickCallback(std::function<void(const MarketTick &)> callback);
-
+    void setSymbol(const std::string &symbol);
+    void setTickIntervalMs(int interval_ms);
     double getCurrentPrice(const std::string &venue) const;
     std::vector<std::string> getVenues() const;
 
@@ -39,9 +32,10 @@ private:
     std::map<std::string, std::mt19937> generators_;
     std::map<std::string, std::normal_distribution<double>> distributions_;
 
-    std::function<void(const MarketTick &)> tick_callback_;
+    std::function<void(const MarketTick &)> on_tick_;
     std::atomic<bool> running_;
     std::thread feed_thread_;
 
-    static constexpr int TICK_INTERVAL_MS = 100;
+    std::string symbol_;
+    int tick_interval_ms_;
 };

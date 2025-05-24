@@ -12,6 +12,7 @@
 #include <openssl/buffer.h>
 #include <regex>
 #include <iomanip>
+#include <chrono>
 
 WebSocketServer::WebSocketServer(int port) : port_(port), server_socket_(-1), running_(false)
 {
@@ -29,6 +30,34 @@ void WebSocketServer::start()
 
     running_ = true;
     server_thread_ = std::thread(&WebSocketServer::serverLoop, this);
+
+    heartbeat_thread_ = std::thread([this]()
+                                    {
+        while (running_)
+        {
+            auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+            std::string hb = heartbeatToJson(now_ms);
+            std::lock_guard<std::mutex> lock(clients_mutex_);
+            for (auto it = connected_clients_.begin(); it != connected_clients_.end();)
+            {
+                int client = *it;
+                try
+                {
+                    sendWebSocketFrame(client, hb);
+                    ++it;
+                }
+                catch (...)
+                {
+                    close(client);
+                    it = connected_clients_.erase(it);
+                    if (client_disconnected_callback_)
+                    {
+                        client_disconnected_callback_(client);
+                    }
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+        } });
 }
 
 void WebSocketServer::stop()
@@ -47,6 +76,11 @@ void WebSocketServer::stop()
     if (server_thread_.joinable())
     {
         server_thread_.join();
+    }
+
+    if (heartbeat_thread_.joinable())
+    {
+        heartbeat_thread_.join();
     }
 
     // Close all client connections
@@ -92,6 +126,11 @@ void WebSocketServer::setClientConnectedCallback(std::function<void(int)> callba
 void WebSocketServer::setClientDisconnectedCallback(std::function<void(int)> callback)
 {
     client_disconnected_callback_ = callback;
+}
+
+void WebSocketServer::setHttpHandler(std::function<std::string(const std::string &, const std::string &, const std::string &)> handler)
+{
+    http_handler_ = handler;
 }
 
 int WebSocketServer::getConnectedClients() const
@@ -197,9 +236,45 @@ void WebSocketServer::handleConnection(int client_socket)
     }
     else
     {
-        // Send basic HTTP response for non-WebSocket requests
-        std::string http_response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nTradePulse WebSocket Server";
-        send(client_socket, http_response.c_str(), http_response.length(), 0);
+        std::string method = request.substr(0, request.find(' '));
+        std::string path;
+        {
+            size_t start = request.find(' ') + 1;
+            size_t end = request.find(' ', start);
+            if (start != std::string::npos && end != std::string::npos)
+                path = request.substr(start, end - start);
+        }
+        // CORS preflight
+        if (method == "OPTIONS")
+        {
+            std::string headers =
+                "HTTP/1.1 204 No Content\r\n"
+                "Access-Control-Allow-Origin: *\r\n"
+                "Access-Control-Allow-Methods: GET, OPTIONS\r\n"
+                "Access-Control-Allow-Headers: *\r\n"
+                "Content-Length: 0\r\n\r\n";
+            send(client_socket, headers.c_str(), headers.size(), 0);
+        }
+        else
+        {
+            std::string body;
+            if (http_handler_)
+            {
+                body = http_handler_(method, path, request);
+            }
+            if (body.empty())
+                body = "TradePulse WebSocket Server";
+            std::ostringstream resp;
+            resp << "HTTP/1.1 200 OK\r\n"
+                 << "Content-Type: text/plain\r\n"
+                 << "Access-Control-Allow-Origin: *\r\n"
+                 << "Access-Control-Allow-Methods: GET, OPTIONS\r\n"
+                 << "Access-Control-Allow-Headers: *\r\n"
+                 << "Content-Length: " << body.size() << "\r\n\r\n"
+                 << body;
+            auto s = resp.str();
+            send(client_socket, s.c_str(), s.size(), 0);
+        }
     }
 
     // Clean up
@@ -308,15 +383,29 @@ std::string WebSocketServer::createWebSocketFrame(const std::string &message)
 std::string WebSocketServer::messageToJson(const WebSocketMessage &message)
 {
     std::ostringstream json;
-    json << std::fixed << std::setprecision(2);
+    json << std::fixed << std::setprecision(6);
     json << "{"
+         << "\"type\":\"" << message.type << "\","
          << "\"venue\":\"" << message.venue << "\","
+         << "\"symbol\":\"" << message.symbol << "\","
+         << "\"side\":\"" << message.action << "\","
          << "\"price\":" << message.price << ","
-         << "\"action\":\"" << message.action << "\","
-         << "\"latency_ms\":" << message.latency_ms << ","
-         << "\"timestamp\":\"" << message.timestamp << "\","
+         << "\"size\":" << message.size << ","
          << "\"pnl\":" << message.pnl << ","
-         << "\"order_id\":\"" << message.order_id << "\""
+         << "\"orderId\":\"" << message.order_id << "\","
+         << "\"modelled_latency_ms\":" << message.modelled_latency_ms << ","
+         << "\"exchange_recv_ts_ms\":" << message.exchange_recv_ts_ms << ","
+         << "\"ingest_ts_ms\":" << message.ingest_ts_ms << ","
+         << "\"order_created_ts_ms\":" << message.order_created_ts_ms << ","
+         << "\"order_executed_ts_ms\":" << message.order_executed_ts_ms << ","
+         << "\"server_broadcast_ts_ms\":" << message.server_broadcast_ts_ms
          << "}";
+    return json.str();
+}
+
+std::string WebSocketServer::heartbeatToJson(int64_t server_ts_ms)
+{
+    std::ostringstream json;
+    json << "{\"type\":\"hb\",\"server_ts_ms\":" << server_ts_ms << "}";
     return json.str();
 }

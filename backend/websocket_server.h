@@ -11,13 +11,21 @@
 
 struct WebSocketMessage
 {
+    std::string type;
     std::string venue;
+    std::string symbol;
     double price;
+    double size;
     std::string action;
-    double latency_ms;
+    double modelled_latency_ms;
     std::string timestamp;
     double pnl;
     std::string order_id;
+    int64_t exchange_recv_ts_ms;
+    int64_t ingest_ts_ms;
+    int64_t order_created_ts_ms;
+    int64_t order_executed_ts_ms;
+    int64_t server_broadcast_ts_ms;
 };
 
 class WebSocketServer
@@ -32,6 +40,7 @@ public:
     void broadcastMessage(const WebSocketMessage &message);
     void setClientConnectedCallback(std::function<void(int)> callback);
     void setClientDisconnectedCallback(std::function<void(int)> callback);
+    void setHttpHandler(std::function<std::string(const std::string &, const std::string &, const std::string &)> handler);
 
     int getConnectedClients() const;
 
@@ -42,6 +51,7 @@ private:
     void sendWebSocketFrame(int client_socket, const std::string &message);
     std::string createWebSocketFrame(const std::string &message);
     std::string messageToJson(const WebSocketMessage &message);
+    std::string heartbeatToJson(int64_t server_ts_ms);
 
     int port_;
     int server_socket_;
@@ -49,11 +59,14 @@ private:
     std::thread server_thread_;
 
     std::set<int> connected_clients_;
-    std::mutex clients_mutex_;
+    mutable std::mutex clients_mutex_;
 
     std::function<void(int)> client_connected_callback_;
     std::function<void(int)> client_disconnected_callback_;
 
     std::queue<WebSocketMessage> message_queue_;
     std::mutex message_queue_mutex_;
+
+    std::thread heartbeat_thread_;
+    std::function<std::string(const std::string &, const std::string &, const std::string &)> http_handler_;
 };

@@ -10,8 +10,8 @@ export const TradeStream: React.FC<TradeStreamProps> = ({ trades, maxTrades = 50
   // Display only the most recent trades
   const recentTrades = trades.slice(-maxTrades).reverse();
 
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
+  const formatTime = (server_broadcast_ts_ms: number) => {
+    const date = new Date(server_broadcast_ts_ms);
     return date.toLocaleTimeString();
   };
 
@@ -42,19 +42,19 @@ export const TradeStream: React.FC<TradeStreamProps> = ({ trades, maxTrades = 50
               >
                 <div className="flex items-center space-x-4">
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium">{trade.venue}</span>
-                    <span className="text-xs text-gray-400">{formatTime(trade.timestamp)}</span>
+                    <span className="text-sm font-medium">{trade.venue} • {trade.symbol}</span>
+                    <span className="text-xs text-gray-400">{formatTime(trade.server_broadcast_ts_ms)}</span>
                   </div>
                   
                   <div className="flex items-center space-x-2">
                     <span
                       className={`px-2 py-1 rounded text-xs font-medium ${
-                        trade.action === 'BUY'
+                        trade.side === 'BUY'
                           ? 'bg-trade-green bg-opacity-20 text-trade-green'
                           : 'bg-trade-red bg-opacity-20 text-trade-red'
                       }`}
                     >
-                      {trade.action}
+                      {trade.side}
                     </span>
                     <span className="text-white font-medium">${formatPrice(trade.price)}</span>
                   </div>
@@ -73,9 +73,9 @@ export const TradeStream: React.FC<TradeStreamProps> = ({ trades, maxTrades = 50
                   </div>
                   
                   <div className="text-right">
-                    <div className="text-sm text-gray-400">Latency</div>
+                    <div className="text-sm text-gray-400">Latency (modelled)</div>
                     <div className="text-sm text-white">
-                      {trade.latency_ms.toFixed(1)}ms
+                      {Number(trade.modelled_latency_ms || 0).toFixed(1)}ms
                     </div>
                   </div>
                 </div>
